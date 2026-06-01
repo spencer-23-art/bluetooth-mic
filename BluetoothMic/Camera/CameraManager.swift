@@ -41,6 +41,10 @@ protocol CameraManagerDelegate: AnyObject {
 class CameraManager: NSObject {
     weak var delegate: CameraManagerDelegate?
     
+    /// Called on main thread after session is fully configured and running.
+    /// Use this to configure bluetooth audio session AFTER capture session setup.
+    var onSessionConfigured: (() -> Void)?
+    
     let captureSession = AVCaptureSession()
     private var videoDeviceInput: AVCaptureDeviceInput?
     private var audioDeviceInput: AVCaptureDeviceInput?
@@ -51,7 +55,7 @@ class CameraManager: NSObject {
     
     private(set) var currentPosition: CameraPosition = .back
     private(set) var currentQuality: VideoQuality = .fullHD
-    private(set) var currentFrameRate: FrameRate = .fps60
+    private(set) var currentFrameRate: FrameRate = .fps30
     private(set) var isRecording = false
     private(set) var isTorchOn = false
     
@@ -78,10 +82,8 @@ class CameraManager: NSObject {
                     videoDeviceInput = input
                 }
                 
-                // Configure video device for best quality
                 try videoDevice.lockForConfiguration()
                 
-                // Enable video stabilization will be set per-connection
                 if videoDevice.isSmoothAutoFocusSupported {
                     videoDevice.isSmoothAutoFocusEnabled = true
                 }
@@ -89,7 +91,7 @@ class CameraManager: NSObject {
                     videoDevice.autoFocusRangeRestriction = .none
                 }
                 
-                // Set frame rate
+                // Set frame rate - only adjust duration, don't touch activeFormat
                 configureFrameRate(videoDevice, desiredFPS: Double(currentFrameRate.rawValue))
                 
                 videoDevice.unlockForConfiguration()
@@ -114,19 +116,18 @@ class CameraManager: NSObject {
         
         captureSession.commitConfiguration()
         
-        // Configure connection settings after committing configuration so connections are established
+        // Configure connection settings after commit
         if let connection = movieOutput.connection(with: .video) {
-            // Configure video stabilization
             if connection.isVideoStabilizationSupported {
                 connection.preferredVideoStabilizationMode = .cinematic
             }
-            // Enable video mirroring for front camera
             if currentPosition == .front && connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = true
             }
         }
         
         DispatchQueue.main.async { [weak self] in
+            self?.onSessionConfigured?()
             self?.delegate?.cameraSessionConfigured()
         }
     }
@@ -135,10 +136,9 @@ class CameraManager: NSObject {
         // Remove existing audio input
         if let existingInput = audioDeviceInput {
             captureSession.removeInput(existingInput)
+            audioDeviceInput = nil
         }
         
-        // The audio session should already be configured by BluetoothAudioManager
-        // to route to bluetooth. We just need to add the default audio device.
         guard let audioDevice = AVCaptureDevice.default(for: .audio) else {
             print("[CameraManager] No audio device available")
             return
@@ -176,21 +176,27 @@ class CameraManager: NSObject {
     func startRecording() {
         guard !isRecording else { return }
         
-        // Re-add audio input to pick up bluetooth route changes
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
+            
+            // Re-add audio input to pick up bluetooth route changes
             self.captureSession.beginConfiguration()
             self.addAudioInput()
             self.captureSession.commitConfiguration()
+            
+            // Verify we have a valid video connection
+            guard self.movieOutput.connection(with: .video) != nil else {
+                print("[CameraManager] No video connection available for recording")
+                return
+            }
             
             let tempDir = NSTemporaryDirectory()
             let fileName = "BT_\(Date().timeIntervalSince1970).mov"
             let url = URL(fileURLWithPath: tempDir).appendingPathComponent(fileName)
             self.outputURL = url
             
-            DispatchQueue.main.async {
-                self.movieOutput.startRecording(to: url, recordingDelegate: self)
-            }
+            // Start recording on session queue - do NOT dispatch to main
+            self.movieOutput.startRecording(to: url, recordingDelegate: self)
         }
     }
     
@@ -382,7 +388,6 @@ class CameraManager: NSObject {
     private func bestVideoDevice(for position: CameraPosition) -> AVCaptureDevice? {
         let devicePosition: AVCaptureDevice.Position = position == .back ? .back : .front
         
-        // Try to get the best available camera
         let discoverySession = AVCaptureDevice.DiscoverySession(
             deviceTypes: [
                 .builtInTripleCamera,
@@ -398,47 +403,25 @@ class CameraManager: NSObject {
     }
     
     private func configureFrameRate(_ device: AVCaptureDevice, desiredFPS: Double) {
-        var bestFormat: AVCaptureDevice.Format?
-        var bestFrameRate: AVFrameRateRange?
+        // When using sessionPreset, do NOT set device.activeFormat directly.
+        // Just check if the current active format supports the desired FPS,
+        // and only set frame duration if it does.
         
-        // 1. Try to find a format supporting desiredFPS
-        for format in device.formats {
-            for range in format.videoSupportedFrameRateRanges {
-                if range.maxFrameRate >= desiredFPS && range.minFrameRate <= desiredFPS {
-                    if bestFrameRate == nil || range.maxFrameRate <= (bestFrameRate?.maxFrameRate ?? .greatestFiniteMagnitude) {
-                        bestFormat = format
-                        bestFrameRate = range
-                    }
-                }
-            }
+        let activeRanges = device.activeFormat.videoSupportedFrameRateRanges
+        
+        // Check if current active format supports desired FPS
+        if let range = activeRanges.first(where: { $0.maxFrameRate >= desiredFPS && $0.minFrameRate <= desiredFPS }) {
+            let fps = min(desiredFPS, range.maxFrameRate)
+            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+            device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+            return
         }
         
-        // 2. Fallback to 30 FPS if desired FPS format is not found
-        if bestFormat == nil && desiredFPS != 30.0 {
-            let fallbackFPS = 30.0
-            for format in device.formats {
-                for range in format.videoSupportedFrameRateRanges {
-                    if range.maxFrameRate >= fallbackFPS && range.minFrameRate <= fallbackFPS {
-                        bestFormat = format
-                        bestFrameRate = range
-                    }
-                }
-            }
-        }
-        
-        // 3. Apply format and frame rate safely
-        if let format = bestFormat {
-            do {
-                // If format is different from active, set it
-                if device.activeFormat != format {
-                    device.activeFormat = format
-                }
-                let actualFPS = bestFrameRate != nil ? min(desiredFPS, bestFrameRate!.maxFrameRate) : 30.0
-                device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(actualFPS))
-                device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(actualFPS))
-            } catch {
-                print("[CameraManager] Failed to set frame rate: \(error)")
-            }
+        // Fallback: use the max available frame rate of the active format
+        if let bestRange = activeRanges.max(by: { $0.maxFrameRate < $1.maxFrameRate }) {
+            let fps = min(desiredFPS, bestRange.maxFrameRate)
+            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+            device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
         }
     }
     

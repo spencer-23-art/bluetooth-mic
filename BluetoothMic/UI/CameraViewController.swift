@@ -57,7 +57,7 @@ class CameraViewController: UIViewController {
     
     private lazy var frameRateButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.setTitle("60Hz", for: .normal)
+        btn.setTitle("30Hz", for: .normal)
         btn.setTitleColor(.systemOrange, for: .normal)
         btn.titleLabel?.font = .systemFont(ofSize: 14, weight: .bold)
         btn.translatesAutoresizingMaskIntoConstraints = false
@@ -206,8 +206,11 @@ class CameraViewController: UIViewController {
         cameraManager.delegate = self
         audioManager.delegate = self
         
-        // Configure bluetooth audio FIRST, before camera session
-        audioManager.configureAudioSession()
+        // Configure bluetooth audio AFTER capture session is ready
+        // so AVCaptureSession doesn't override our audio routing
+        cameraManager.onSessionConfigured = { [weak self] in
+            self?.audioManager.configureAudioSession()
+        }
         
         // Request permissions and configure
         requestPermissions()
@@ -387,7 +390,6 @@ class CameraViewController: UIViewController {
         
         group.notify(queue: .main) { [weak self] in
             if cameraGranted && micGranted {
-                self?.audioManager.configureAudioSession()
                 self?.setupPreviewLayer()
                 self?.cameraManager.configure()
             } else {
@@ -417,8 +419,6 @@ class CameraViewController: UIViewController {
         if cameraManager.isRecording {
             cameraManager.stopRecording()
         } else {
-            // Ensure bluetooth audio is still routed before recording
-            audioManager.configureAudioSession()
             cameraManager.startRecording()
         }
     }
@@ -479,6 +479,8 @@ class CameraViewController: UIViewController {
     }
     
     @objc private func showAudioDevicePicker() {
+        // Refresh device list before showing picker
+        audioManager.refreshAvailableDevices()
         let devices = audioManager.availableDevices
         let alert = UIAlertController(title: "选择音频输入", message: "当前使用蓝牙设备收音效果更好", preferredStyle: .actionSheet)
         
@@ -490,10 +492,6 @@ class CameraViewController: UIViewController {
             
             alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
                 self?.audioManager.selectDevice(device)
-                // Refresh audio input in camera session
-                self?.cameraManager.captureSession.beginConfiguration()
-                self?.cameraManager.addAudioInput()
-                self?.cameraManager.captureSession.commitConfiguration()
             })
         }
         
