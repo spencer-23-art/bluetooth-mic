@@ -61,17 +61,30 @@ jobs:
         " >> $LOG_FILE 2>&1
 
         echo "=== Converting P12 to Legacy Format ===" >> $LOG_FILE
-        if openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export -legacy -provider legacy -provider default >> $LOG_FILE 2>&1; then
-            echo "Successfully converted P12 using -legacy with providers" >> $LOG_FILE
-            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
-        elif openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export -legacy >> $LOG_FILE 2>&1; then
-            echo "Successfully converted P12 using -legacy" >> $LOG_FILE
-            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
-        elif openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export >> $LOG_FILE 2>&1; then
-            echo "Successfully converted P12 using standard export" >> $LOG_FILE
-            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+        # 1. Extract P12 to temporary PEM (this works on ALL OpenSSL/LibreSSL versions!)
+        if openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/temp.pem -nodes >> $LOG_FILE 2>&1; then
+            echo "Successfully extracted P12 to PEM" >> $LOG_FILE
+            
+            # 2. Try exporting legacy P12 from PEM with OpenSSL 3 provider flags
+            if openssl pkcs12 -export -legacy -provider legacy -provider default -in $RUNNER_TEMP/temp.pem -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" >> $LOG_FILE 2>&1; then
+                echo "Successfully exported P12 to legacy format using providers" >> $LOG_FILE
+                CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+            # 3. Try exporting legacy P12 without provider flags
+            elif openssl pkcs12 -export -legacy -in $RUNNER_TEMP/temp.pem -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" >> $LOG_FILE 2>&1; then
+                echo "Successfully exported P12 to legacy format" >> $LOG_FILE
+                CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+            # 4. Fallback to standard export
+            elif openssl pkcs12 -export -in $RUNNER_TEMP/temp.pem -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" >> $LOG_FILE 2>&1; then
+                echo "Successfully exported P12 using standard export" >> $LOG_FILE
+                CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+            else
+                echo "Failed to export P12 from PEM" >> $LOG_FILE
+            fi
+            
+            # Clean up temp PEM
+            rm -f $RUNNER_TEMP/temp.pem
         else
-            echo "Failed to convert P12, proceeding with raw file" >> $LOG_FILE
+            echo "Failed to extract P12 to PEM, proceeding with raw file" >> $LOG_FILE
         fi
 
         echo "=== Importing Certificate ===" >> $LOG_FILE
