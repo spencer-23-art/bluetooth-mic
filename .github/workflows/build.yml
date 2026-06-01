@@ -30,11 +30,17 @@ jobs:
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
         LOG_FILE=./import_log.txt
+        echo "=== Environment Diagnostics ===" >> $LOG_FILE
+        echo "Raw P12_PASSWORD length: ${#P12_PASSWORD}" >> $LOG_FILE
+        echo "Raw KEYCHAIN_PASSWORD length: ${#KEYCHAIN_PASSWORD}" >> $LOG_FILE
+        echo "Raw P12_BASE64 length: ${#P12_BASE64}" >> $LOG_FILE
+        echo "Raw PROVISION_PROFILE_BASE64 length: ${#PROVISION_PROFILE_BASE64}" >> $LOG_FILE
+        
         echo "=== Creating Keychain ===" >> $LOG_FILE
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
-        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH >> $LOG_FILE 2>&1
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH >> $LOG_FILE 2>&1
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH >> $LOG_FILE 2>&1
 
         echo "=== Decoding P12 ===" >> $LOG_FILE
         CERTIFICATE_PATH=$RUNNER_TEMP/cert.p12
@@ -52,16 +58,16 @@ jobs:
         except Exception as e:
             print('P12 Decode Error:', str(e))
             sys.exit(1)
-        " 2>&1 >> $LOG_FILE
+        " >> $LOG_FILE 2>&1
 
         echo "=== Importing Certificate ===" >> $LOG_FILE
-        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH >> $LOG_FILE 2>&1
         
         echo "=== Partition List ===" >> $LOG_FILE
-        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH >> $LOG_FILE 2>&1
         
         echo "=== List Keychain ===" >> $LOG_FILE
-        security list-keychain -d user -s $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security list-keychain -d user -s $KEYCHAIN_PATH >> $LOG_FILE 2>&1
 
         echo "=== Decoding Provisioning Profile ===" >> $LOG_FILE
         PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
@@ -79,11 +85,11 @@ jobs:
         except Exception as e:
             print('Profile Decode Error:', str(e))
             sys.exit(1)
-        " 2>&1 >> $LOG_FILE
+        " >> $LOG_FILE 2>&1
 
         echo "=== Installing Profile ===" >> $LOG_FILE
-        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles 2>&1 >> $LOG_FILE
-        cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/3da5b62c-7acb-4db6-976e-1e20ac3061a0.mobileprovision 2>&1 >> $LOG_FILE
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles >> $LOG_FILE 2>&1
+        cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/3da5b62c-7acb-4db6-976e-1e20ac3061a0.mobileprovision >> $LOG_FILE 2>&1
 
     - name: Upload Debug Log
       if: ${{ always() }}
