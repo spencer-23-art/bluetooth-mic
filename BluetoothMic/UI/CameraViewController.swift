@@ -425,6 +425,7 @@ class CameraViewController: UIViewController {
             if cameraGranted && micGranted {
                 self?.setupPreviewLayer()
                 self?.cameraManager.configure()
+                self?.audioManager.startLevelMonitoring()
             } else {
                 self?.showPermissionAlert()
             }

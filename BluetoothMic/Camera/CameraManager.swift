@@ -407,9 +407,10 @@ class CameraManager: NSObject {
         var bestFormat: AVCaptureDevice.Format?
         var bestFrameRate: AVFrameRateRange?
         
+        // 1. Try to find a format supporting desiredFPS
         for format in device.formats {
             for range in format.videoSupportedFrameRateRanges {
-                if range.maxFrameRate >= desiredFPS {
+                if range.maxFrameRate >= desiredFPS && range.minFrameRate <= desiredFPS {
                     if bestFrameRate == nil || range.maxFrameRate <= (bestFrameRate?.maxFrameRate ?? .greatestFiniteMagnitude) {
                         bestFormat = format
                         bestFrameRate = range
@@ -418,9 +419,32 @@ class CameraManager: NSObject {
             }
         }
         
-        if bestFormat != nil {
-            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(desiredFPS))
-            device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(desiredFPS))
+        // 2. Fallback to 30 FPS if desired FPS format is not found
+        if bestFormat == nil && desiredFPS != 30.0 {
+            let fallbackFPS = 30.0
+            for format in device.formats {
+                for range in format.videoSupportedFrameRateRanges {
+                    if range.maxFrameRate >= fallbackFPS && range.minFrameRate <= fallbackFPS {
+                        bestFormat = format
+                        bestFrameRate = range
+                    }
+                }
+            }
+        }
+        
+        // 3. Apply format and frame rate safely
+        if let format = bestFormat {
+            do {
+                // If format is different from active, set it
+                if device.activeFormat != format {
+                    device.activeFormat = format
+                }
+                let actualFPS = bestFrameRate != nil ? min(desiredFPS, bestFrameRate!.maxFrameRate) : 30.0
+                device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(actualFPS))
+                device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(actualFPS))
+            } catch {
+                print("[CameraManager] Failed to set frame rate: \(error)")
+            }
         }
     }
     
