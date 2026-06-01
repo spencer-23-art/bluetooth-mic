@@ -145,6 +145,28 @@ class CameraViewController: UIViewController {
     
 
     
+    // Transition Blur Mask for resolution switching
+    private lazy var transitionBlurView: UIVisualEffectView = {
+        let blur = UIBlurEffect(style: .dark)
+        let v = UIVisualEffectView(effect: blur)
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.alpha = 0
+        v.isHidden = true
+        
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.color = .white
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+        v.contentView.addSubview(spinner)
+        
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: v.contentView.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: v.contentView.centerYAnchor)
+        ])
+        
+        return v
+    }()
+    
     // Focus indicator
     private lazy var focusIndicator: UIView = {
         let v = UIView(frame: CGRect(x: 0, y: 0, width: 80, height: 80))
@@ -244,6 +266,15 @@ class CameraViewController: UIViewController {
             previewView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             previewView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        
+        // Blur transition mask
+        previewView.addSubview(transitionBlurView)
+        NSLayoutConstraint.activate([
+            transitionBlurView.topAnchor.constraint(equalTo: previewView.topAnchor),
+            transitionBlurView.leadingAnchor.constraint(equalTo: previewView.leadingAnchor),
+            transitionBlurView.trailingAnchor.constraint(equalTo: previewView.trailingAnchor),
+            transitionBlurView.bottomAnchor.constraint(equalTo: previewView.bottomAnchor),
         ])
         
         // Focus indicator
@@ -465,6 +496,9 @@ class CameraViewController: UIViewController {
         guard let currentIndex = qualities.firstIndex(of: cameraManager.currentQuality) else { return }
         let nextIndex = (currentIndex + 1) % qualities.count
         let nextQuality = qualities[nextIndex]
+        
+        showTransitionBlur()
+        
         cameraManager.setVideoQuality(nextQuality)
         qualityButton.setTitle(nextQuality.rawValue, for: .normal)
     }
@@ -474,6 +508,9 @@ class CameraViewController: UIViewController {
         guard let currentIndex = rates.firstIndex(of: cameraManager.currentFrameRate) else { return }
         let nextIndex = (currentIndex + 1) % rates.count
         let nextRate = rates[nextIndex]
+        
+        showTransitionBlur()
+        
         cameraManager.setFrameRate(nextRate)
         frameRateButton.setTitle(nextRate.displayName, for: .normal)
     }
@@ -593,6 +630,33 @@ class CameraViewController: UIViewController {
         }
     }
     
+    // MARK: - Transition Blur Helpers
+    
+    private func showTransitionBlur() {
+        // Disable UI controls to avoid multiple changes
+        qualityButton.isEnabled = false
+        frameRateButton.isEnabled = false
+        switchCameraButton.isEnabled = false
+        
+        transitionBlurView.isHidden = false
+        UIView.animate(withDuration: 0.15) {
+            self.transitionBlurView.alpha = 1.0
+        }
+    }
+    
+    private func hideTransitionBlur() {
+        UIView.animate(withDuration: 0.3, delay: 0.15, options: .curveEaseInOut) {
+            self.transitionBlurView.alpha = 0
+        } completion: { _ in
+            self.transitionBlurView.isHidden = true
+            
+            // Re-enable UI controls
+            self.qualityButton.isEnabled = true
+            self.frameRateButton.isEnabled = true
+            self.switchCameraButton.isEnabled = true
+        }
+    }
+    
     // MARK: - Recording Timer
     
     private func startTimer() {
@@ -685,6 +749,10 @@ extension CameraViewController: CameraManagerDelegate {
     
     func cameraSessionConfigured() {
         // Session is ready
+    }
+    
+    func cameraSessionDidUpdateConfiguration() {
+        hideTransitionBlur()
     }
     
     func cameraError(_ error: Error) {

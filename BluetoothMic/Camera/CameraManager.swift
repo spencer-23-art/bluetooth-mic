@@ -35,6 +35,7 @@ protocol CameraManagerDelegate: AnyObject {
     func cameraDidStopRecording(url: URL?, error: Error?)
     func cameraDidCapturePhoto(_ image: UIImage?)
     func cameraSessionConfigured()
+    func cameraSessionDidUpdateConfiguration()
     func cameraError(_ error: Error)
 }
 
@@ -284,6 +285,11 @@ class CameraManager: NSObject {
                 }
             }
             self.captureSession.commitConfiguration()
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.cameraSessionDidUpdateConfiguration()
+            }
         }
     }
     
@@ -297,6 +303,11 @@ class CameraManager: NSObject {
                 try device.lockForConfiguration()
                 self.configureFrameRate(device, desiredFPS: Double(fps.rawValue))
                 device.unlockForConfiguration()
+                
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.delegate?.cameraSessionDidUpdateConfiguration()
+                }
             } catch {
                 print("[CameraManager] Frame rate error: \(error)")
             }
