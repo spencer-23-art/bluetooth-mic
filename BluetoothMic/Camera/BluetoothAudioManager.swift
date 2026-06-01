@@ -28,7 +28,7 @@ class BluetoothAudioManager {
     weak var delegate: BluetoothAudioManagerDelegate?
     
     private let audioSession = AVAudioSession.sharedInstance()
-
+    private var isHandlingRouteChange = false
     
     private(set) var currentInputDevice: AudioInputDevice?
     private(set) var availableDevices: [AudioInputDevice] = []
@@ -44,8 +44,8 @@ class BluetoothAudioManager {
     // MARK: - Audio Session Setup
     
     func configureAudioSession() {
+        isHandlingRouteChange = true
         do {
-            // Key: allowBluetooth enables HFP, allowBluetoothA2DP allows A2DP input on supported devices
             try audioSession.setCategory(
                 .playAndRecord,
                 mode: .videoRecording,
@@ -56,6 +56,10 @@ class BluetoothAudioManager {
             autoSelectBluetoothDevice()
         } catch {
             print("[BluetoothAudioManager] Failed to configure audio session: \(error)")
+        }
+        // Allow route change handling again after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.isHandlingRouteChange = false
         }
     }
     
@@ -95,13 +99,10 @@ class BluetoothAudioManager {
     }
     
     func autoSelectBluetoothDevice() {
-        // Prefer bluetooth device if available
         if let btDevice = availableDevices.first(where: { $0.isBluetooth }) {
             selectDevice(btDevice)
         }
     }
-    
-
     
     // MARK: - Notifications
     
@@ -121,6 +122,9 @@ class BluetoothAudioManager {
     }
     
     @objc private func handleRouteChange(_ notification: Notification) {
+        // Prevent re-entrant handling: setPreferredInput/setCategory trigger more route changes
+        guard !isHandlingRouteChange else { return }
+        
         guard let userInfo = notification.userInfo,
               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
@@ -129,19 +133,31 @@ class BluetoothAudioManager {
         
         switch reason {
         case .newDeviceAvailable:
+            isHandlingRouteChange = true
             DispatchQueue.main.async { [weak self] in
-                self?.refreshAvailableDevices()
-                self?.autoSelectBluetoothDevice()
+                guard let self = self else { return }
+                self.refreshAvailableDevices()
+                self.autoSelectBluetoothDevice()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.isHandlingRouteChange = false
+                }
             }
         case .oldDeviceUnavailable:
             DispatchQueue.main.async { [weak self] in
                 self?.refreshAvailableDevices()
             }
         case .override, .categoryChange:
-            // AVCaptureSession can cause these when starting recording.
-            // Re-apply bluetooth preference to prevent falling back to built-in mic.
+            // DO NOT call configureAudioSession() here - it calls setCategory()
+            // which triggers another .categoryChange = infinite loop!
+            // Just refresh and re-apply preferred input.
+            isHandlingRouteChange = true
             DispatchQueue.main.async { [weak self] in
-                self?.configureAudioSession()
+                guard let self = self else { return }
+                self.refreshAvailableDevices()
+                self.autoSelectBluetoothDevice()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.isHandlingRouteChange = false
+                }
             }
         default:
             break
