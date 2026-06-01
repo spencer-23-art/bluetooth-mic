@@ -5,7 +5,7 @@ class CameraViewController: UIViewController {
     
     // MARK: - Properties
     
-    private let cameraManager = CameraManager()
+    private let cameraManager = CameraManager.shared
     private let audioManager = BluetoothAudioManager.shared
     
     private var previewLayer: AVCaptureVideoPreviewLayer!
@@ -146,24 +146,11 @@ class CameraViewController: UIViewController {
 
     
     // Transition Blur Mask for resolution switching
+    // Start with nil effect, animate to heavy blur for smooth frosted glass transition
     private lazy var transitionBlurView: UIVisualEffectView = {
-        let blur = UIBlurEffect(style: .dark)
-        let v = UIVisualEffectView(effect: blur)
+        let v = UIVisualEffectView(effect: nil)
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.alpha = 0
         v.isHidden = true
-        
-        let spinner = UIActivityIndicatorView(style: .medium)
-        spinner.color = .white
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        spinner.startAnimating()
-        v.contentView.addSubview(spinner)
-        
-        NSLayoutConstraint.activate([
-            spinner.centerXAnchor.constraint(equalTo: v.contentView.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: v.contentView.centerYAnchor)
-        ])
-        
         return v
     }()
     
@@ -638,15 +625,16 @@ class CameraViewController: UIViewController {
         frameRateButton.isEnabled = false
         switchCameraButton.isEnabled = false
         
+        transitionBlurView.effect = nil
         transitionBlurView.isHidden = false
-        UIView.animate(withDuration: 0.15) {
-            self.transitionBlurView.alpha = 1.0
+        UIView.animate(withDuration: 0.2) {
+            self.transitionBlurView.effect = UIBlurEffect(style: .systemThickMaterialDark)
         }
     }
     
     private func hideTransitionBlur() {
-        UIView.animate(withDuration: 0.3, delay: 0.15, options: .curveEaseInOut) {
-            self.transitionBlurView.alpha = 0
+        UIView.animate(withDuration: 0.35, delay: 0.15, options: .curveEaseInOut) {
+            self.transitionBlurView.effect = nil
         } completion: { _ in
             self.transitionBlurView.isHidden = true
             

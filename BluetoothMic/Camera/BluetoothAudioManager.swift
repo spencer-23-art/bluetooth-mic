@@ -54,6 +54,12 @@ class BluetoothAudioManager {
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
             refreshAvailableDevices()
             autoSelectBluetoothDevice()
+            
+            // After bluetooth route is set, tell CameraManager to add audio input
+            // with a small delay so the route change propagates
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                CameraManager.shared.refreshAudioInput()
+            }
         } catch {
             print("[BluetoothAudioManager] Failed to configure audio session: \(error)")
         }
@@ -93,6 +99,11 @@ class BluetoothAudioManager {
                 currentInput: device.portType,
                 inputName: device.name
             )
+            
+            // Refresh capture session audio input after route change
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                CameraManager.shared.refreshAudioInput()
+            }
         } catch {
             print("[BluetoothAudioManager] Failed to select device: \(error)")
         }

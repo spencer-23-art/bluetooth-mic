@@ -40,6 +40,7 @@ protocol CameraManagerDelegate: AnyObject {
 }
 
 class CameraManager: NSObject {
+    static let shared = CameraManager()
     weak var delegate: CameraManagerDelegate?
     
     /// Called on main thread after session is fully configured and running.
@@ -101,8 +102,10 @@ class CameraManager: NSObject {
             }
         }
         
-        // Add audio input
-        addAudioInput()
+        // NOTE: Do NOT add audio input here.
+        // Adding AVCaptureDeviceInput for audio during session config
+        // forces the route to built-in mic, overriding bluetooth.
+        // Audio input is added later after BluetoothAudioManager sets the route.
         
         // Add movie output
         if captureSession.canAddOutput(movieOutput) {
@@ -133,26 +136,40 @@ class CameraManager: NSObject {
         }
     }
     
-    func addAudioInput() {
-        // Remove existing audio input
-        if let existingInput = audioDeviceInput {
-            captureSession.removeInput(existingInput)
-            audioDeviceInput = nil
-        }
-        
-        guard let audioDevice = AVCaptureDevice.default(for: .audio) else {
-            print("[CameraManager] No audio device available")
-            return
-        }
-        
-        do {
-            let audioInput = try AVCaptureDeviceInput(device: audioDevice)
-            if captureSession.canAddInput(audioInput) {
-                captureSession.addInput(audioInput)
-                audioDeviceInput = audioInput
+    /// Refresh audio input on the capture session.
+    /// Call this AFTER BluetoothAudioManager has set the preferred audio route,
+    /// so that AVCaptureDevice.default(for: .audio) returns the bluetooth device.
+    func refreshAudioInput() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.captureSession.beginConfiguration()
+            
+            // Remove existing audio input
+            if let existingInput = self.audioDeviceInput {
+                self.captureSession.removeInput(existingInput)
+                self.audioDeviceInput = nil
             }
-        } catch {
-            print("[CameraManager] Audio input error: \(error)")
+            
+            // Now .default(for: .audio) should reflect the current AVAudioSession route
+            guard let audioDevice = AVCaptureDevice.default(for: .audio) else {
+                print("[CameraManager] No audio device available")
+                self.captureSession.commitConfiguration()
+                return
+            }
+            
+            print("[CameraManager] Adding audio device: \(audioDevice.localizedName)")
+            
+            do {
+                let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+                if self.captureSession.canAddInput(audioInput) {
+                    self.captureSession.addInput(audioInput)
+                    self.audioDeviceInput = audioInput
+                }
+            } catch {
+                print("[CameraManager] Audio input error: \(error)")
+            }
+            
+            self.captureSession.commitConfiguration()
         }
     }
     
@@ -180,6 +197,9 @@ class CameraManager: NSObject {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             
+            // Re-add audio input right before recording to pick up current bluetooth route
+            self._refreshAudioInputSync()
+            
             // Verify we have a valid video connection
             guard self.movieOutput.connection(with: .video) != nil else {
                 print("[CameraManager] No video connection available for recording")
@@ -193,6 +213,31 @@ class CameraManager: NSObject {
             
             self.movieOutput.startRecording(to: url, recordingDelegate: self)
         }
+    }
+    
+    /// Synchronous version, must be called on sessionQueue
+    private func _refreshAudioInputSync() {
+        captureSession.beginConfiguration()
+        
+        if let existingInput = audioDeviceInput {
+            captureSession.removeInput(existingInput)
+            audioDeviceInput = nil
+        }
+        
+        if let audioDevice = AVCaptureDevice.default(for: .audio) {
+            print("[CameraManager] Recording with audio device: \(audioDevice.localizedName)")
+            do {
+                let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+                if captureSession.canAddInput(audioInput) {
+                    captureSession.addInput(audioInput)
+                    audioDeviceInput = audioInput
+                }
+            } catch {
+                print("[CameraManager] Audio input error: \(error)")
+            }
+        }
+        
+        captureSession.commitConfiguration()
     }
     
     func stopRecording() {
