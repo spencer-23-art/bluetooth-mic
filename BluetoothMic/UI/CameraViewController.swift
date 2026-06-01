@@ -233,7 +233,11 @@ class CameraViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         cameraManager.startSession()
-        audioManager.startLevelMonitoring()
+        
+        // Only start if microphone permission is already granted
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
+            audioManager.startLevelMonitoring()
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {

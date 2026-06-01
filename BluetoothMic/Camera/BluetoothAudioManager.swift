@@ -107,27 +107,42 @@ class BluetoothAudioManager {
     // MARK: - Audio Level Monitoring
     
     func startLevelMonitoring() {
-        // Use a silent audio recorder to get input levels
+        // Stop any existing session to prevent duplicate recorder/timer conflicts
+        stopLevelMonitoring()
+        
+        // Only attempt to start if audio permission is granted
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+            print("[BluetoothAudioManager] Cannot start level monitoring: Microphone permission not granted")
+            return
+        }
+        
         let tempDir = NSTemporaryDirectory()
         let url = URL(fileURLWithPath: tempDir).appendingPathComponent("level_monitor.caf")
         let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatAppleLossless),
-            AVSampleRateKey: 44100.0,
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 8000.0,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.min.rawValue
+            AVLinearPCMBitDepthKey: 8,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false
         ]
         
         do {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
             audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.record()
+            let started = audioRecorder?.record() ?? false
+            if !started {
+                print("[BluetoothAudioManager] Failed to start audioRecorder")
+                return
+            }
             
             levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                self?.audioRecorder?.updateMeters()
-                let level = self?.audioRecorder?.averagePower(forChannel: 0) ?? -160
+                guard let self = self, let recorder = self.audioRecorder, recorder.isRecording else { return }
+                recorder.updateMeters()
+                let level = recorder.averagePower(forChannel: 0)
                 // Normalize from -160..0 dB to 0..1
                 let normalizedLevel = max(0, (level + 50) / 50)
-                self?.delegate?.audioLevelDidUpdate(normalizedLevel)
+                self.delegate?.audioLevelDidUpdate(normalizedLevel)
             }
         } catch {
             print("[BluetoothAudioManager] Level monitoring error: \(error)")
