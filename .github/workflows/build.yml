@@ -60,6 +60,20 @@ jobs:
             sys.exit(1)
         " >> $LOG_FILE 2>&1
 
+        echo "=== Converting P12 to Legacy Format ===" >> $LOG_FILE
+        if openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export -legacy -provider legacy -provider default >> $LOG_FILE 2>&1; then
+            echo "Successfully converted P12 using -legacy with providers" >> $LOG_FILE
+            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+        elif openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export -legacy >> $LOG_FILE 2>&1; then
+            echo "Successfully converted P12 using -legacy" >> $LOG_FILE
+            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+        elif openssl pkcs12 -in $CERTIFICATE_PATH -passin pass:"$P12_PASSWORD" -out $RUNNER_TEMP/legacy.p12 -passout pass:"$P12_PASSWORD" -export >> $LOG_FILE 2>&1; then
+            echo "Successfully converted P12 using standard export" >> $LOG_FILE
+            CERTIFICATE_PATH=$RUNNER_TEMP/legacy.p12
+        else
+            echo "Failed to convert P12, proceeding with raw file" >> $LOG_FILE
+        fi
+
         echo "=== Importing Certificate ===" >> $LOG_FILE
         security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH >> $LOG_FILE 2>&1
         
