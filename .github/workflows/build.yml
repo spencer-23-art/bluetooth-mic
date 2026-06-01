@@ -29,24 +29,68 @@ jobs:
         PROVISION_PROFILE_BASE64: ${{ secrets.PROVISION_PROFILE_BASE64 }}
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
-        # Create temporary keychain
+        LOG_FILE=./import_log.txt
+        echo "=== Creating Keychain ===" >> $LOG_FILE
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
 
-        # Import certificate
+        echo "=== Decoding P12 ===" >> $LOG_FILE
         CERTIFICATE_PATH=$RUNNER_TEMP/cert.p12
-        python3 -c "import base64, os; data = os.environ['P12_BASE64'].encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip(); open('$CERTIFICATE_PATH', 'wb').write(base64.b64decode(data))"
-        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security list-keychain -d user -s $KEYCHAIN_PATH
+        python3 -c "
+        import base64, os, sys
+        try:
+            val = os.environ.get('P12_BASE64', '')
+            print('Raw P12 secret length:', len(val))
+            data = val.encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip()
+            print('Cleaned P12 base64 length:', len(data))
+            decoded = base64.b64decode(data)
+            print('Decoded P12 length:', len(decoded))
+            open('$CERTIFICATE_PATH', 'wb').write(decoded)
+            print('P12 saved successfully.')
+        except Exception as e:
+            print('P12 Decode Error:', str(e))
+            sys.exit(1)
+        " 2>&1 >> $LOG_FILE
 
-        # Install provisioning profile
+        echo "=== Importing Certificate ===" >> $LOG_FILE
+        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        
+        echo "=== Partition List ===" >> $LOG_FILE
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+        
+        echo "=== List Keychain ===" >> $LOG_FILE
+        security list-keychain -d user -s $KEYCHAIN_PATH 2>&1 >> $LOG_FILE
+
+        echo "=== Decoding Provisioning Profile ===" >> $LOG_FILE
         PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
-        python3 -c "import base64, os; data = os.environ['PROVISION_PROFILE_BASE64'].encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip(); open('$PROFILE_PATH', 'wb').write(base64.b64decode(data))"
-        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-        cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/3da5b62c-7acb-4db6-976e-1e20ac3061a0.mobileprovision
+        python3 -c "
+        import base64, os, sys
+        try:
+            val = os.environ.get('PROVISION_PROFILE_BASE64', '')
+            print('Raw Profile secret length:', len(val))
+            data = val.encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip()
+            print('Cleaned Profile base64 length:', len(data))
+            decoded = base64.b64decode(data)
+            print('Decoded Profile length:', len(decoded))
+            open('$PROFILE_PATH', 'wb').write(decoded)
+            print('Profile saved successfully.')
+        except Exception as e:
+            print('Profile Decode Error:', str(e))
+            sys.exit(1)
+        " 2>&1 >> $LOG_FILE
+
+        echo "=== Installing Profile ===" >> $LOG_FILE
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles 2>&1 >> $LOG_FILE
+        cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/3da5b62c-7acb-4db6-976e-1e20ac3061a0.mobileprovision 2>&1 >> $LOG_FILE
+
+    - name: Upload Debug Log
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: import-debug-log
+        path: import_log.txt
 
     - name: Build Archive
       run: |
