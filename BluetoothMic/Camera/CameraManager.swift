@@ -72,6 +72,11 @@ class CameraManager: NSObject {
     }
     
     private func configureSession() {
+        // CRITICAL: Prevent AVCaptureSession from overriding our AVAudioSession config.
+        // Without this, the capture session will reset audio routing to built-in mic,
+        // killing any bluetooth connection we've set up.
+        captureSession.automaticallyConfiguresApplicationAudioSession = false
+        
         captureSession.beginConfiguration()
         captureSession.sessionPreset = currentQuality.preset
         
