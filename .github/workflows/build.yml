@@ -94,7 +94,7 @@ jobs:
         security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH >> $LOG_FILE 2>&1
         
         echo "=== List Keychain ===" >> $LOG_FILE
-        security list-keychain -d user -s $KEYCHAIN_PATH >> $LOG_FILE 2>&1
+        security list-keychains -d user -s $KEYCHAIN_PATH >> $LOG_FILE 2>&1 || true
 
         echo "=== Decoding Provisioning Profile ===" >> $LOG_FILE
         PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
