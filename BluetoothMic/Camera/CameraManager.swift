@@ -179,11 +179,6 @@ class CameraManager: NSObject {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             
-            // Re-add audio input to pick up bluetooth route changes
-            self.captureSession.beginConfiguration()
-            self.addAudioInput()
-            self.captureSession.commitConfiguration()
-            
             // Verify we have a valid video connection
             guard self.movieOutput.connection(with: .video) != nil else {
                 print("[CameraManager] No video connection available for recording")
@@ -195,7 +190,6 @@ class CameraManager: NSObject {
             let url = URL(fileURLWithPath: tempDir).appendingPathComponent(fileName)
             self.outputURL = url
             
-            // Start recording on session queue - do NOT dispatch to main
             self.movieOutput.startRecording(to: url, recordingDelegate: self)
         }
     }

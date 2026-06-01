@@ -128,17 +128,20 @@ class BluetoothAudioManager {
         }
         
         switch reason {
-        case .newDeviceAvailable, .oldDeviceUnavailable:
+        case .newDeviceAvailable:
             DispatchQueue.main.async { [weak self] in
                 self?.refreshAvailableDevices()
-                // Auto-select bluetooth when newly connected
-                if reason == .newDeviceAvailable {
-                    self?.autoSelectBluetoothDevice()
-                }
+                self?.autoSelectBluetoothDevice()
+            }
+        case .oldDeviceUnavailable:
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshAvailableDevices()
             }
         case .override, .categoryChange:
+            // AVCaptureSession can cause these when starting recording.
+            // Re-apply bluetooth preference to prevent falling back to built-in mic.
             DispatchQueue.main.async { [weak self] in
-                self?.refreshAvailableDevices()
+                self?.configureAudioSession()
             }
         default:
             break
