@@ -143,24 +143,7 @@ class CameraViewController: UIViewController {
         return btn
     }()
     
-    // Audio level indicator
-    private lazy var audioLevelBar: UIView = {
-        let v = UIView()
-        v.backgroundColor = UIColor.green.withAlphaComponent(0.8)
-        v.translatesAutoresizingMaskIntoConstraints = false
-        v.layer.cornerRadius = 2
-        return v
-    }()
-    
-    private lazy var audioLevelContainer: UIView = {
-        let v = UIView()
-        v.backgroundColor = UIColor.white.withAlphaComponent(0.2)
-        v.translatesAutoresizingMaskIntoConstraints = false
-        v.layer.cornerRadius = 2
-        return v
-    }()
-    
-    private var audioLevelWidthConstraint: NSLayoutConstraint?
+
     
     // Focus indicator
     private lazy var focusIndicator: UIView = {
@@ -233,17 +216,11 @@ class CameraViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         cameraManager.startSession()
-        
-        // Only start if microphone permission is already granted
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
-            audioManager.startLevelMonitoring()
-        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         cameraManager.stopSession()
-        audioManager.stopLevelMonitoring()
     }
     
     override var prefersStatusBarHidden: Bool { true }
@@ -321,24 +298,7 @@ class CameraViewController: UIViewController {
             
             audioDeviceButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
         ])
-        
-        // Audio level
-        view.addSubview(audioLevelContainer)
-        audioLevelContainer.addSubview(audioLevelBar)
-        let levelWidth = audioLevelBar.widthAnchor.constraint(equalToConstant: 0)
-        audioLevelWidthConstraint = levelWidth
-        
-        NSLayoutConstraint.activate([
-            audioLevelContainer.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 8),
-            audioLevelContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            audioLevelContainer.widthAnchor.constraint(equalToConstant: 120),
-            audioLevelContainer.heightAnchor.constraint(equalToConstant: 4),
-            
-            audioLevelBar.leadingAnchor.constraint(equalTo: audioLevelContainer.leadingAnchor),
-            audioLevelBar.topAnchor.constraint(equalTo: audioLevelContainer.topAnchor),
-            audioLevelBar.bottomAnchor.constraint(equalTo: audioLevelContainer.bottomAnchor),
-            levelWidth,
-        ])
+
         
         // Bottom bar
         view.addSubview(bottomBar)
@@ -427,9 +387,9 @@ class CameraViewController: UIViewController {
         
         group.notify(queue: .main) { [weak self] in
             if cameraGranted && micGranted {
+                self?.audioManager.configureAudioSession()
                 self?.setupPreviewLayer()
                 self?.cameraManager.configure()
-                self?.audioManager.startLevelMonitoring()
             } else {
                 self?.showPermissionAlert()
             }
@@ -752,20 +712,6 @@ extension CameraViewController: BluetoothAudioManagerDelegate {
     
     func availableDevicesDidChange(_ devices: [AudioInputDevice]) {
         // Could update UI here if needed
-    }
-    
-    func audioLevelDidUpdate(_ level: Float) {
-        let maxWidth: CGFloat = 120
-        audioLevelWidthConstraint?.constant = maxWidth * CGFloat(level)
-        
-        // Color: green -> yellow -> red
-        if level < 0.5 {
-            audioLevelBar.backgroundColor = UIColor.green.withAlphaComponent(0.8)
-        } else if level < 0.8 {
-            audioLevelBar.backgroundColor = UIColor.yellow.withAlphaComponent(0.8)
-        } else {
-            audioLevelBar.backgroundColor = UIColor.red.withAlphaComponent(0.8)
-        }
     }
 }
 

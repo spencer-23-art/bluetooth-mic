@@ -4,7 +4,6 @@ import UIKit
 protocol BluetoothAudioManagerDelegate: AnyObject {
     func audioRouteDidChange(currentInput: AVAudioSession.Port?, inputName: String?)
     func availableDevicesDidChange(_ devices: [AudioInputDevice])
-    func audioLevelDidUpdate(_ level: Float)
 }
 
 struct AudioInputDevice {
@@ -29,8 +28,7 @@ class BluetoothAudioManager {
     weak var delegate: BluetoothAudioManagerDelegate?
     
     private let audioSession = AVAudioSession.sharedInstance()
-    private var levelTimer: Timer?
-    private var audioRecorder: AVAudioRecorder?
+
     
     private(set) var currentInputDevice: AudioInputDevice?
     private(set) var availableDevices: [AudioInputDevice] = []
@@ -40,7 +38,6 @@ class BluetoothAudioManager {
     }
     
     deinit {
-        stopLevelMonitoring()
         NotificationCenter.default.removeObserver(self)
     }
     
@@ -104,57 +101,7 @@ class BluetoothAudioManager {
         }
     }
     
-    // MARK: - Audio Level Monitoring
-    
-    func startLevelMonitoring() {
-        // Stop any existing session to prevent duplicate recorder/timer conflicts
-        stopLevelMonitoring()
-        
-        // Only attempt to start if audio permission is granted
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
-            print("[BluetoothAudioManager] Cannot start level monitoring: Microphone permission not granted")
-            return
-        }
-        
-        let tempDir = NSTemporaryDirectory()
-        let url = URL(fileURLWithPath: tempDir).appendingPathComponent("level_monitor.caf")
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatLinearPCM),
-            AVSampleRateKey: 8000.0,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 8,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false
-        ]
-        
-        do {
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-            audioRecorder?.isMeteringEnabled = true
-            let started = audioRecorder?.record() ?? false
-            if !started {
-                print("[BluetoothAudioManager] Failed to start audioRecorder")
-                return
-            }
-            
-            levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                guard let self = self, let recorder = self.audioRecorder, recorder.isRecording else { return }
-                recorder.updateMeters()
-                let level = recorder.averagePower(forChannel: 0)
-                // Normalize from -160..0 dB to 0..1
-                let normalizedLevel = max(0, (level + 50) / 50)
-                self.delegate?.audioLevelDidUpdate(normalizedLevel)
-            }
-        } catch {
-            print("[BluetoothAudioManager] Level monitoring error: \(error)")
-        }
-    }
-    
-    func stopLevelMonitoring() {
-        levelTimer?.invalidate()
-        levelTimer = nil
-        audioRecorder?.stop()
-        audioRecorder = nil
-    }
+
     
     // MARK: - Notifications
     

@@ -124,12 +124,6 @@ class CameraManager: NSObject {
             if currentPosition == .front && connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = true
             }
-            
-            // Prefer HEVC
-            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
-                let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.hevc]
-                movieOutput.setOutputSettings(settings, for: connection)
-            }
         }
         
         DispatchQueue.main.async { [weak self] in
