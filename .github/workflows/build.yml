@@ -7,20 +7,22 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-14
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
     - name: Select Xcode
-      run: sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
     - name: Install XcodeGen
       run: brew install xcodegen
 
     - name: Generate Xcode Project
-      run: xcodegen generate
+      run: |
+        xcodegen generate
+        sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' BluetoothMic.xcodeproj/project.pbxproj || true
 
     - name: Import Certificate
       env:
