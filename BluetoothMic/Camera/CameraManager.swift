@@ -104,35 +104,33 @@ class CameraManager: NSObject {
         // Add movie output
         if captureSession.canAddOutput(movieOutput) {
             captureSession.addOutput(movieOutput)
-            
-            // Configure video stabilization
-            if let connection = movieOutput.connection(with: .video) {
-                if connection.isVideoStabilizationSupported {
-                    connection.preferredVideoStabilizationMode = .cinematic
-                }
-                // Enable video mirroring for front camera
-                if currentPosition == .front && connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = true
-                }
-            }
-            
-            // Prefer HEVC
-            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
-                let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.hevc]
-                movieOutput.setOutputSettings(settings, for: movieOutput.connection(with: .video)!)
-            }
         }
         
         // Add photo output
         if captureSession.canAddOutput(photoOutput) {
             captureSession.addOutput(photoOutput)
             photoOutput.maxPhotoQualityPrioritization = .quality
-            if photoOutput.availablePhotoCodecTypes.contains(.hevc) {
-                // Will be used during capture
-            }
         }
         
         captureSession.commitConfiguration()
+        
+        // Configure connection settings after committing configuration so connections are established
+        if let connection = movieOutput.connection(with: .video) {
+            // Configure video stabilization
+            if connection.isVideoStabilizationSupported {
+                connection.preferredVideoStabilizationMode = .cinematic
+            }
+            // Enable video mirroring for front camera
+            if currentPosition == .front && connection.isVideoMirroringSupported {
+                connection.isVideoMirrored = true
+            }
+            
+            // Prefer HEVC
+            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
+                let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.hevc]
+                movieOutput.setOutputSettings(settings, for: connection)
+            }
+        }
         
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.cameraSessionConfigured()
