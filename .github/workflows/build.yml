@@ -37,14 +37,14 @@ jobs:
 
         # Import certificate
         CERTIFICATE_PATH=$RUNNER_TEMP/cert.p12
-        echo -n "$P12_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+        python3 -c "import base64, os; data = os.environ['P12_BASE64'].encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip(); open('$CERTIFICATE_PATH', 'wb').write(base64.b64decode(data))"
         security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
         security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         security list-keychain -d user -s $KEYCHAIN_PATH
 
         # Install provisioning profile
         PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
-        echo -n "$PROVISION_PROFILE_BASE64" | base64 --decode -o $PROFILE_PATH
+        python3 -c "import base64, os; data = os.environ['PROVISION_PROFILE_BASE64'].encode('utf-8', 'ignore').replace(b'\xff\xfe', b'').replace(b'\xfe\xff', b'').replace(b'\x00', b'').strip(); open('$PROFILE_PATH', 'wb').write(base64.b64decode(data))"
         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
         cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/3da5b62c-7acb-4db6-976e-1e20ac3061a0.mobileprovision
 
