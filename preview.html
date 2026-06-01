@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BT录像 - UI Preview</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Inter', -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  .phone-frame {
+    width: 393px;
+    height: 852px;
+    background: #000;
+    border-radius: 50px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 3px #333,
+      0 0 0 6px #111,
+      0 30px 80px rgba(0,0,0,0.6);
+  }
+
+  /* Dynamic Island */
+  .dynamic-island {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 126px;
+    height: 36px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 100;
+  }
+
+  /* Camera preview (simulated) */
+  .camera-preview {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .camera-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Simulated camera view with gradient */
+  .fake-camera {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(60,80,60,0.3) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 60%, rgba(40,60,80,0.2) 0%, transparent 50%),
+      linear-gradient(180deg, #2a3a2a 0%, #1a2a1a 30%, #0a1a0a 70%, #000 100%);
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  .fake-camera::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 4px;
+  }
+
+  /* Simulated scene objects */
+  .scene-object {
+    position: absolute;
+    border-radius: 8px;
+    opacity: 0.15;
+  }
+  .scene-object.o1 { top: 25%; left: 15%; width: 120px; height: 180px; background: #4a6a4a; }
+  .scene-object.o2 { top: 35%; right: 20%; width: 80px; height: 120px; background: #5a7a5a; }
+  .scene-object.o3 { bottom: 35%; left: 30%; width: 150px; height: 60px; background: #3a5a3a; }
+
+  /* Top bar */
+  .top-bar {
+    position: absolute;
+    top: 58px;
+    left: 16px;
+    right: 16px;
+    height: 48px;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 10;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .top-bar button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .top-bar button:hover {
+    background: rgba(255,255,255,0.1);
+  }
+
+  .top-bar button:active {
+    transform: scale(0.95);
+  }
+
+  .audio-btn {
+    color: #00e5ff !important;
+    min-width: 90px;
+  }
+
+  .audio-btn .icon {
+    font-size: 16px;
+  }
+
+  .timer-area {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .rec-dot {
+    width: 8px;
+    height: 8px;
+    background: #ff3b30;
+    border-radius: 50%;
+    display: none;
+  }
+
+  .rec-dot.active {
+    display: block;
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  .timer-label {
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    display: none;
+    letter-spacing: 0.5px;
+  }
+
+  .timer-label.active {
+    display: block;
+  }
+
+  .quality-btn {
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+  }
+
+  .fps-btn {
+    color: #ff9f0a !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+  }
+
+  .torch-btn .icon {
+    font-size: 18px;
+  }
+
+  /* Audio level */
+  .audio-level-container {
+    position: absolute;
+    top: 114px;
+    left: 16px;
+    width: 120px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  .audio-level-bar {
+    height: 100%;
+    width: 0%;
+    background: #30d158;
+    border-radius: 2px;
+    transition: width 0.05s linear, background-color 0.2s;
+  }
+
+  /* Focus indicator */
+  .focus-indicator {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border: 2px solid #ffd60a;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 20;
+    display: none;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .focus-indicator.visible {
+    display: block;
+    animation: focusIn 0.3s ease-out forwards, focusFade 0.8s 0.5s ease-out forwards;
+  }
+
+  @keyframes focusIn {
+    from { transform: translate(-50%, -50%) scale(1.5); opacity: 0.5; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  @keyframes focusFade {
+    to { opacity: 0; }
+  }
+
+  /* Zoom label */
+  .zoom-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -80px);
+    background: rgba(0,0,0,0.6);
+    color: #ffd60a;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 14px;
+    border-radius: 12px;
+    z-index: 15;
+    display: none;
+  }
+
+  /* Exposure slider (vertical, right side) */
+  .exposure-area {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .exposure-area.visible {
+    opacity: 1;
+  }
+
+  .sun-icon {
+    font-size: 20px;
+    color: #ffd60a;
+  }
+
+  .exposure-slider {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 4px;
+    height: 160px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .exposure-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #ffd60a;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 140px;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding-bottom: 20px;
+    z-index: 10;
+  }
+
+  .side-btn {
+    width: 44px;
+    height: 44px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .side-btn:hover {
+    background: rgba(255,255,255,0.15);
+  }
+
+  .side-btn:active {
+    transform: scale(0.9);
+  }
+
+  /* Record button */
+  .record-btn {
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    border: 5px solid rgba(255,255,255,0.9);
+    background: none;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s;
+  }
+
+  .record-btn:active {
+    border-color: rgba(255,255,255,0.6);
+  }
+
+  .record-inner {
+    width: 60px;
+    height: 60px;
+    background: #ff3b30;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .record-btn.recording .record-inner {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  /* Toast */
+  .toast {
+    position: absolute;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 30;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .toast.visible {
+    opacity: 1;
+  }
+
+  /* Audio device picker overlay */
+  .device-picker {
+    position: absolute;
+    bottom: 140px;
+    left: 16px;
+    right: 16px;
+    background: rgba(30,30,30,0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    z-index: 25;
+    display: none;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .device-picker.visible {
+    display: block;
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .device-picker-title {
+    padding: 14px 16px 8px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .device-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .device-item:hover {
+    background: rgba(255,255,255,0.08);
+  }
+
+  .device-item .d-icon {
+    font-size: 20px;
+    width: 28px;
+    text-align: center;
+  }
+
+  .device-item .d-name {
+    flex: 1;
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .device-item .d-check {
+    color: #00e5ff;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .device-item.bluetooth .d-icon { color: #00e5ff; }
+  .device-item.builtin .d-icon { color: #aaa; }
+
+  .device-cancel {
+    padding: 14px;
+    text-align: center;
+    color: #00e5ff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .device-cancel:hover {
+    background: rgba(255,255,255,0.05);
+  }
+
+  /* Instructions overlay */
+  .instructions {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(30,30,46,0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    font-size: 13px;
+    line-height: 1.8;
+    z-index: 1000;
+    max-width: 260px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  }
+
+  .instructions h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+    color: #00e5ff;
+  }
+
+  .instructions kbd {
+    background: rgba(255,255,255,0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+
+  .flash-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: white;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone-frame">
+  <div class="dynamic-island"></div>
+
+  <div class="camera-preview" id="cameraPreview">
+    <div class="fake-camera">
+      <div class="scene-object o1"></div>
+      <div class="scene-object o2"></div>
+      <div class="scene-object o3"></div>
+    </div>
+
+    <div class="focus-indicator" id="focusIndicator"></div>
+    <div class="zoom-label" id="zoomLabel">1.0x</div>
+
+    <!-- Top bar -->
+    <div class="top-bar">
+      <button class="audio-btn" id="audioBtn" onclick="toggleDevicePicker()">
+        <span class="icon">🎧</span>
+        <span id="audioName">AirPods Pro</span>
+      </button>
+      <div class="timer-area">
+        <div class="rec-dot" id="recDot"></div>
+        <div class="timer-label" id="timerLabel">00:00</div>
+      </div>
+      <button class="quality-btn" id="qualityBtn" onclick="toggleQuality()">1080p</button>
+      <button class="fps-btn" id="fpsBtn" onclick="toggleFrameRate()">60Hz</button>
+      <button class="torch-btn" id="torchBtn" onclick="toggleTorch()">
+        <span class="icon" id="torchIcon">⚡</span>
+      </button>
+    </div>
+
+    <!-- Audio level -->
+    <div class="audio-level-container">
+      <div class="audio-level-bar" id="audioLevel"></div>
+    </div>
+
+    <!-- Exposure -->
+    <div class="exposure-area" id="exposureArea">
+      <div class="sun-icon">☀️</div>
+      <input type="range" class="exposure-slider" min="-3" max="3" step="0.1" value="0">
+    </div>
+
+    <!-- Device picker -->
+    <div class="device-picker" id="devicePicker">
+      <div class="device-picker-title">选择音频输入</div>
+      <div class="device-item bluetooth" onclick="selectDevice('AirPods Pro', true)">
+        <span class="d-icon">🎧</span>
+        <span class="d-name">AirPods Pro</span>
+        <span class="d-check" id="checkBT">✓</span>
+      </div>
+      <div class="device-item bluetooth" onclick="selectDevice('DJI Mic', true)">
+        <span class="d-icon">🎙️</span>
+        <span class="d-name">DJI Mic</span>
+        <span class="d-check" id="checkDJI" style="display:none">✓</span>
+      </div>
+      <div class="device-item builtin" onclick="selectDevice('iPhone 麦克风', false)">
+        <span class="d-icon">🎤</span>
+        <span class="d-name">iPhone 麦克风</span>
+        <span class="d-check" id="checkBuiltin" style="display:none">✓</span>
+      </div>
+      <div class="device-cancel" onclick="toggleDevicePicker()">取消</div>
+    </div>
+
+    <!-- Flash overlay for photo capture -->
+    <div class="flash-overlay" id="flashOverlay"></div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <button class="side-btn" onclick="capturePhoto()" title="拍照">📷</button>
+    <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+      <div class="record-inner" id="recordInner"></div>
+    </button>
+    <button class="side-btn" onclick="switchCamera()" title="切换摄像头">🔄</button>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- Instructions -->
+<div class="instructions">
+  <h3>📱 UI 交互预览</h3>
+  👆 点击画面 → 对焦框<br>
+  🔴 中间按钮 → 开始/停止录制<br>
+  📷 左侧按钮 → 拍照闪光<br>
+  🔄 右侧按钮 → 切换摄像头<br>
+  🎧 左上按钮 → 音频设备选择<br>
+  ⚡ 右上按钮 → 闪光灯开关<br>
+  <kbd>1080p</kbd> → 切换画质<br>
+  <kbd style="color:#ff9f0a">30Hz</kbd> → 切换帧率 30/60/120<br>
+  <br>
+  <span style="color:#888;font-size:12px">实际效果以 iOS 真机为准<br>音频电平条自动模拟动画</span>
+</div>
+
+<script>
+  // State
+  let isRecording = false;
+  let isTorchOn = false;
+  let currentQuality = 0;
+  const qualities = ['1080p', '4K', '720p'];
+  let currentFps = 1;
+  const frameRates = ['30Hz', '60Hz', '120Hz'];
+  let recordingTime = 0;
+  let timerInterval = null;
+  let pickerVisible = false;
+
+  // Audio level simulation
+  function simulateAudioLevel() {
+    const bar = document.getElementById('audioLevel');
+    const animate = () => {
+      const level = Math.random() * 0.6 + (isRecording ? 0.2 : 0.05);
+      const width = Math.min(level * 100, 100);
+      bar.style.width = width + '%';
+      if (width < 50) bar.style.background = '#30d158';
+      else if (width < 80) bar.style.background = '#ffd60a';
+      else bar.style.background = '#ff3b30';
+      requestAnimationFrame(() => setTimeout(animate, 50 + Math.random() * 50));
+    };
+    animate();
+  }
+  simulateAudioLevel();
+
+  // Focus on tap
+  document.getElementById('cameraPreview').addEventListener('click', function(e) {
+    // Don't trigger on buttons
+    if (e.target.closest('.top-bar') || e.target.closest('.bottom-bar') ||
+        e.target.closest('.device-picker') || e.target.closest('.exposure-area')) return;
+
+    const rect = this.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const indicator = document.getElementById('focusIndicator');
+    indicator.style.left = x + 'px';
+    indicator.style.top = y + 'px';
+    indicator.className = 'focus-indicator';
+    // Force reflow
+    void indicator.offsetWidth;
+    indicator.className = 'focus-indicator visible';
+
+    // Show exposure briefly
+    const exp = document.getElementById('exposureArea');
+    exp.classList.add('visible');
+    clearTimeout(window._expTimer);
+    window._expTimer = setTimeout(() => exp.classList.remove('visible'), 3000);
+  });
+
+  // Toggle recording
+  function toggleRecording() {
+    isRecording = !isRecording;
+    const btn = document.getElementById('recordBtn');
+    const dot = document.getElementById('recDot');
+    const timer = document.getElementById('timerLabel');
+
+    if (isRecording) {
+      btn.classList.add('recording');
+      dot.classList.add('active');
+      timer.classList.add('active');
+      recordingTime = 0;
+      timer.textContent = '00:00';
+      timerInterval = setInterval(() => {
+        recordingTime++;
+        const m = String(Math.floor(recordingTime / 60)).padStart(2, '0');
+        const s = String(recordingTime % 60).padStart(2, '0');
+        timer.textContent = m + ':' + s;
+      }, 1000);
+    } else {
+      btn.classList.remove('recording');
+      dot.classList.remove('active');
+      timer.classList.remove('active');
+      clearInterval(timerInterval);
+      showToast('视频已保存到相册');
+    }
+  }
+
+  // Toggle quality
+  function toggleQuality() {
+    if (isRecording) return;
+    currentQuality = (currentQuality + 1) % qualities.length;
+    document.getElementById('qualityBtn').textContent = qualities[currentQuality];
+  }
+
+  // Toggle frame rate
+  function toggleFrameRate() {
+    if (isRecording) return;
+    currentFps = (currentFps + 1) % frameRates.length;
+    document.getElementById('fpsBtn').textContent = frameRates[currentFps];
+    showToast('帧率: ' + frameRates[currentFps]);
+  }
+
+  // Toggle torch
+  function toggleTorch() {
+    isTorchOn = !isTorchOn;
+    const icon = document.getElementById('torchIcon');
+    const btn = document.getElementById('torchBtn');
+    if (isTorchOn) {
+      icon.textContent = '⚡';
+      icon.style.filter = 'none';
+      btn.style.color = '#ffd60a';
+      // Simulate torch on camera
+      document.querySelector('.fake-camera').style.filter = 'brightness(1.3)';
+    } else {
+      icon.textContent = '⚡';
+      btn.style.color = 'white';
+      document.querySelector('.fake-camera').style.filter = '';
+    }
+  }
+
+  // Capture photo
+  function capturePhoto() {
+    const flash = document.getElementById('flashOverlay');
+    flash.style.transition = 'none';
+    flash.style.opacity = '0.85';
+    setTimeout(() => {
+      flash.style.transition = 'opacity 0.2s';
+      flash.style.opacity = '0';
+    }, 80);
+    showToast('照片已保存');
+  }
+
+  // Switch camera
+  function switchCamera() {
+    if (isRecording) return;
+    const preview = document.querySelector('.fake-camera');
+    preview.style.transition = 'transform 0.4s';
+    preview.style.transform = 'scaleX(-1)';
+    setTimeout(() => {
+      preview.style.transform = 'scaleX(1)';
+    }, 400);
+    showToast('已切换摄像头');
+  }
+
+  // Device picker
+  function toggleDevicePicker() {
+    pickerVisible = !pickerVisible;
+    document.getElementById('devicePicker').classList.toggle('visible', pickerVisible);
+  }
+
+  function selectDevice(name, isBluetooth) {
+    document.getElementById('audioName').textContent = name;
+    const btn = document.getElementById('audioBtn');
+    const icon = btn.querySelector('.icon');
+
+    if (isBluetooth) {
+      icon.textContent = '🎧';
+      btn.style.color = '#00e5ff';
+    } else {
+      icon.textContent = '🎤';
+      btn.style.color = 'white';
+    }
+
+    // Update checks
+    document.getElementById('checkBT').style.display = name === 'AirPods Pro' ? '' : 'none';
+    document.getElementById('checkDJI').style.display = name === 'DJI Mic' ? '' : 'none';
+    document.getElementById('checkBuiltin').style.display = name === 'iPhone 麦克风' ? '' : 'none';
+
+    toggleDevicePicker();
+  }
+
+  // Toast
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
+  }
+</script>
+</body>
+</html>

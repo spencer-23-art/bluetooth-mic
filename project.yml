@@ -1,0 +1,47 @@
+name: BluetoothMic
+options:
+  bundleIdPrefix: app.quartz6089
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    DEVELOPMENT_TEAM: 64T2VBQ5CC
+    CODE_SIGN_STYLE: Manual
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    CODE_SIGN_IDENTITY: "Apple Distribution"
+    ENABLE_BITCODE: "NO"
+    SUPPORTS_MACCATALYST: "NO"
+    INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+
+targets:
+  BluetoothMic:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: BluetoothMic
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.quartz6089.mango1201
+        INFOPLIST_FILE: BluetoothMic/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BluetoothMic/BluetoothMic.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        PROVISIONING_PROFILE_SPECIFIER: "00008140-001C4C9A346A801CLQ0FME"
+        DEVELOPMENT_TEAM: 64T2VBQ5CC
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: "NO"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+    resources:
+      - path: BluetoothMic/Resources/Assets.xcassets
+      - path: BluetoothMic/Resources/LaunchScreen.storyboard
